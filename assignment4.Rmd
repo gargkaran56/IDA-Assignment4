@@ -1,0 +1,240 @@
+---
+title: "Data Analysis Exercise"
+author: KARAN GARG
+output:
+  pdf_document:
+    
+    toc: false
+  html_document:
+    theme: yeti
+    always_allow_html: false
+---
+
+In this exercise, we are going to study the coverage of coral and  algae measured in percentage in the Great Barrier Reef (Australia) at different times and locations. To do that, we are given two data sets, *coral1* and *coral2*, that contain information on the reef identifiers (*REEF_NAME* and *REEF_ID*), the reef locations (*SECTOR*, *SHELF*, *LATITUDE* and *LONGITUDE*), and the *Coverage* (in percentage) of *Algae* and *Hard Coral* (stored in the variable *Groups*) for each of the locations and times. You can find the data sets for this exercise in the folder called *Data*.
+
+In addition to the marks displayed in each question, an additional **15 points** have been allocated for assessment of general coding style and overall performance.
+
+**Please ensure that the report knits properly and all the R code is visible in the final knitted report.** 
+
+**This is an individual assignment**
+
+
+```{r setup, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+# Libraries required for the analysis (you can add more if you want to)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+
+library(tidyverse)
+library(readr)
+library(lubridate)
+library(tsibble)
+#library(cowplot)   
+library(colorspace) 
+library(ggrepel) 
+library(kableExtra)
+library(ggResidpanel)
+library(broom)
+library(rpart)
+library(rpart.plot)
+library(plotly)
+```
+
+
+
+## Question 1: Read the first coral data set (coral1.csv) and store it in a data object called *coral1* (1pt). Show the first 2 rows of the data frame (1pt). What are the names of the variables in the data frame (use R to extract the names of the variables) (1pt)?
+
+```{r}
+coral1 <- read.csv(here::here("data/coral1.csv")) 
+head(coral1,2)%>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+
+```{r}
+names(coral1)
+```
+
+
+## Question 2:  Read the second coral data set (coral2.csv) (1pt), store it in a data object called *coral2_0* and show the first 2 rows of the data frame (1pt). Transform your data frame *coral2_0* into a long format data frame, where the variables *Algae* and *Hard Coral* are displayed together in a single variable called *Groups*, and their values in a variable called *Coverage* (4pts). Store this new data frame in a data object called *coral2* and ensure that *coral2* contains the variables *REEF_ID*, *SITE_NO*, *Groups*, and *Coverage* (1pt). Display the first 2 rows (1pt).
+
+```{r}
+coral2_0 <- read.csv(here::here("data/coral2.csv")) 
+head(coral2_0,2)  %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+
+```{r}
+coral2 <- coral2_0 %>% 
+  pivot_longer(cols = 3:4,
+               names_to = "Groups",
+               values_to = "Coverage")
+head(coral2,2) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+
+
+## Question 3: Combine both data frames *coral1* and *coral2* into a single data frame called *coral*. In your code, you must specify explicitly the variables that you are using to join both data frames (4pts). Show the first 2 rows of the new combined data frame (1pt).
+
+```{r}
+coral <- left_join(coral2,coral1,by = c("REEF_ID","SITE_NO"))
+head(coral,2) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+
+
+
+## Question 4: Continue working with the data frame called *coral* that you created in Question 3. Please use the information in the variable *SAMPLE_DATE* to create two new variables *Year* and *Month* to store the information on year and month, respectively (2pts). These two new variables must be added into the data frame *coral*. Which are the years represented in this data set (use inline R code to answer this question) (1pt)? 
+
+```{r}
+coral <- coral %>% 
+  mutate(Year = year(SAMPLE_DATE),
+         Month = month(SAMPLE_DATE))
+```
+
+The years present in  datafrram **coral** are **`r sort(unique(coral$Year))`** 
+
+## Question 5: By using the data frame *coral* that you created earlier in Question 3, calculate the mean coverage for the two coral *Groups* for each of the sectors recorded for each year (3pts). Display the first 2 rows (1pt). Subsequently, filter the data frame that you have just created to plot the yearly trends for *Algae* in each *SECTOR* level (4pts). 
+
+```{r Q5,fig.width=10}
+coral %>% 
+  group_by(Groups,SECTOR,Year) %>% 
+  summarise(Avg.coverage = mean(Coverage)) %>% 
+  head(2) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+```{r}
+Q5grqph <- coral %>% 
+  group_by(Groups,SECTOR,Year) %>% 
+  summarise(Avg.coverage = mean(Coverage)) %>% 
+  filter(Groups == "Algae") %>% 
+  ggplot(aes(Year,
+             Avg.coverage,
+             color = SECTOR)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~SECTOR)
+ggplotly(Q5grqph)
+
+```
+
+
+## Question 6: Continue working with the same data frame that you have created in Question 3 called *coral*. Now select only the reefs that are located in Cairns. To do that, please select the reefs of which the variable *SECTOR* takes the value of *CA* and store this information in a new data frame called *cairns_sector* (1pt). What is the dimension of this newly created data frame (use inline R code to answer) (1pt)? How many unique reefs are there in this data frame (use inline R code to answer) (1pt)? Display the first 2 rows of the data frame (1pt).
+
+```{r}
+cairns_sector <- coral %>% 
+  filter(SECTOR == "CA")
+head(cairns_sector,2) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+
+The dimensions of the dataframe **cairns_sector** are ***`r dim(cairns_sector)`***.
+
+There are **`r length(unique(cairns_sector$REEF_NAME))`** unique Reefs in the **cairns_sector**.
+
+## Question 7: Using the data frame created in Question 6 (*cairns_sector*), calculate the yearly *Coverage* mean for each of the groups in the variable *Groups* across all the reefs in the Cairns sector and store it in a data frame called *cairns_mean* (Hint: Calculate mean coverage of the 2 coral groups across all the reefs in the Cairns sector for each year) (3pts). Show the first two rows of the data frame *cairns_mean* (1pt). Using that data, display in a line plot the trends for the *Coverage* means of *Algae* and *Hard Coral* in the entire Cairns sector over time using *facet_wrap()* (2pts). What can we observe in the figure (1pt, max 30 words)?
+
+```{r}
+cairns_sector %>% 
+  group_by(Groups,REEF_NAME,Year) %>% 
+  summarise(Avg.coverage = mean(Coverage)) %>% 
+  head(2) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+```{r Q7-plt,fig.width=10,fig.cap="Avg,Coverage of groups in entire cairns_sector over the years"}
+Q7graph <- cairns_sector %>% 
+  group_by(Groups,REEF_NAME,Year) %>% 
+  summarise(Avg.coverage = mean(Coverage)) %>% 
+  ggplot(aes(Year,
+             Avg.coverage,
+             group = Groups,
+             color = Groups)) +
+  geom_line() +
+  facet_wrap(~REEF_NAME) 
+ggplotly(Q7graph)
+```
+The Figure above showcases that:
+
+*  Avg.Coverage in each REEFS never changed over the years
+*  **Algae** was maximum found in ***GREEN ISLAND REEF***, whereas **Hard.Coral** in ***AGINCOURT REEFS (NO 1)*** 
+
+\clearpage
+
+## Question 8: Using the *cairns_sector* data frame that you created in Question 6, select only the variables *REEF_NAME*, *Groups*, *Coverage*, and *Year*, then answer the following:  Which is the reef with the highest *Coverage* mean of *Hard Coral* in 2017 and what is the corresponding *Coverage* mean (use dplyr and pipes to produce a table that will allow you to answer the questions) (10pts)?
+
+```{r}
+cairns_sector %>% 
+  select(REEF_NAME,Groups,Coverage,Year) %>%
+  filter(Groups == "Hard.Coral" & Year == 2017) %>% 
+  group_by(REEF_NAME) %>% 
+  summarise(Avg.coverage = mean(Coverage)) %>% 
+  slice_max(Avg.coverage) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+
+
+## Question 9: Keep working on the data frame *cairns_sector* from Question 6. Now investigate the differences in the *Coverage* of *Algae* and *Hard Coral* in the variable *SHELF*. The variable *SHELF* contains information about the location of the reefs with respect to the coast: I (= inner) represents reefs closer to the shore, M (= mid) represents reefs located in the middle shelf, and O (= outer) represents reefs located in the outer shelf. Select only the years *1993* and *2017* and then create a table using the function *kable()*, where you display the mean values for *Algae* and *Hard Coral* *Coverage* for each of the different *SHELF* locations per year.
+
+
+```{r}
+cairns_sector %>% 
+  filter(Year == 1993 | Year == 2017) %>% 
+  group_by(Groups,SHELF,Year) %>% 
+  summarise(Avg_coverage = mean(Coverage)) %>% 
+  arrange(Year,desc(Avg_coverage)) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+  
+```
+
+
+
+## Question 10: Use the data frame *cairns_sector* that you created in Question 6. How many observations for each reef are there for **algae** in year 2000 (3pt)? Which reef is represented with the highest number of observations in the year 2000 (1pt)?
+
+
+```{r}
+cairns_sector %>% 
+  filter(Year == 2000 & Groups == "Algae") %>% 
+  group_by(REEF_NAME) %>% 
+  summarise(No_of_Observation = n()) %>% 
+  arrange(-No_of_Observation) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+
+reef_top <- cairns_sector %>% 
+  filter(Year == 2000) %>% 
+  group_by(REEF_NAME) %>% 
+  summarise(No_of_Observation = n()) %>% 
+  slice_max(No_of_Observation)
+```
+
+Reef with the highest number of observations in the year 2000 is **`r reef_top$REEF_NAME`**
+
+## Question 11: Use the data frame *cairns_mean* that you created in Question 7. Here our aim is to understand whether there is a relationship between the *Hard Coral* *Coverage* and the *Algae* *Coverage* over time. To do that, please transform the data frame *cairns_mean* into **wide format** so that we can have two variables *Algae*  and *Hard Coral* that will contain the corresponding *Coverage* values. Store the new data frame in a data object called *cairns_wider* (3pts). Display the first two rows of the data frame *cairns_wider* (1pt). Using *geom_point()*, plot the variable *Hard Coral* on the y axis and *Algae* on the x axis (2pts). Add a title to the figure that reads "Relationship between Algae and Hard Coral Coverage in the Cairns Sector" (1pt).
+
+```{r}
+cairns_wider <- coral2_0  
+
+cairns_wider %>% 
+  ggplot(aes(Algae,
+             Hard.Coral)) +
+  geom_point() +
+  ggtitle("Relationship between Algae and Hard Coral Coverage in the Cairns Sector")
+```
+
+
+
+## Question 12 5510: Fit two models to the data frame *cairns_wider* you created in Question 11 and discuss whether any of the model is adequate to explain the relationship between those two variables and why. Provide evidence (using R code) and explanations for your answer (10pts).
+
+```{r}
+tidy(lm(Hard.Coral ~ Algae,data = cairns_wider)) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("basic","striped","hover"))
+```
+Tje Above table clearly states that there is a -ve correlation between the variables **Algae** and **Harrd.Coral**. And it also tells that the relation is fairly strong as value is approx -0.6.
